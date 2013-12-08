@@ -14,45 +14,46 @@ import re
 from copy import copy
 
 class DigitalOceanApi():
-  client_key  = None
-  api_key     = None
-  debug       = False
-  servers     = {}
-  images      = {}
-  ssh_keys    = []
-  sizes       = []
+  client_id             = None
+  api_key               = None
+  debug                 = False
+  account_droplets      = {}
+  account_images        = []
+  account_ssh_keys      = []
+  droplet_sizes         = []
+  digitalocean_regions  = []
 
   def log(self, message):
     if self.debug == True:
       print message
 
-  def _name_match(self, name, regex):
+  def _name_match(self, name, pattern, regex):
     if type(name) == dict:
       name = name['name']
 
     if regex:
-      if re.match(, hostname):
+      if re.match(name, pattern):
         return True
     else:
-      if hostname == droplet['name']:
+      if pattern == name:
         return True
     return False
 
-  def _filter_droplets(self, items, name, regex):
+  def _filter(self, items, name, regex):
     _items = []
     grouped = (type(items) == dict)
 
     # search listed servers
     if not grouped:
       for item in items:
-        if self._name_match(item, regex):
+        if self._name_match(item, name, regex):
           _items.append(item)
 
     # search grouped servers
     else:
-      for group in items.iteritems():
-        if self._name_match(group, regex):
-          return items[group]
+      for groupname in items.iteritems():
+        if self._name_match(groupname, name, regex):
+          return items[groupname]
 
     return _items
 
@@ -60,7 +61,7 @@ class DigitalOceanApi():
     params = "client_id=%s&api_key=%s" % (self.client_id, self.api_key)
     for param in options.iteritems():
       value = options[param]
-      if type(value) = list:
+      if type(value) == list:
         value = ",".join(value)
       params += "&%s=%s" % (param, value)
 
@@ -72,7 +73,7 @@ class DigitalOceanApi():
 
     # lookup url
     try:
-      droplets = urllib2.urlopen(DROPLETS_URL)
+      droplets = urllib2.urlopen(url)
     except urllib2.URLError:
       self.log(urllib2.URLError)
       raise Exception("Fatal error: Unable to connect to API")
@@ -111,31 +112,31 @@ class DigitalOceanApi():
       options['grouped'] = False
 
     # Try not to bother the API server
-    if len(self.servers) > 0 and options['lookup'] == False:
-      return self.servers
+    if len(self.account_droplets) > 0 and options['lookup'] == False:
+      return self.account_droplets
 
     # prepare to receive data
-    self.servers = []
+    self.account_droplets = []
     if options['grouped'] == True:
-      self.servers = {}
+      self.account_droplets = {}
     data = self._lookup('droplets')['droplets']
 
     # store data as returned
     if options['grouped'] == False:
-      self.servers = data['droplets']
+      self.account_droplets = data
 
     # store data grouped by name
     else:
-      for droplet in data['droplets']:
+      for droplet in data:
         name = droplet['name']
-        if name not in self.servers:
-          self.servers[name] = []
-        self.servers[name].append(droplet)
+        if name not in self.account_droplets:
+          self.account_droplets[name] = []
+        self.account_droplets[name].append(droplet)
 
     if 'hostname' in options:
-      return self._filter(self.servers, options['hostname'], options['regex'])
+      return self._filter(self.account_droplets, options['hostname'], options['regex'])
 
-    return self.servers
+    return self.account_droplets
 
   """
   Uses: /droplets/new
@@ -191,31 +192,31 @@ class DigitalOceanApi():
       options['grouped'] = False
 
     # Try not to bother the API server
-    if len(self.images) > 0 and options['lookup'] == False:
-      return self.images
+    if len(self.account_images) > 0 and options['lookup'] == False:
+      return self.account_images
 
     # prepare to receive data
-    self.images = []
+    self.account_images = []
     if options['grouped'] == True:
-      self.images = {}
+      self.account_images = {}
     data = self._lookup('images')['images']
 
     # store data as returned
     if options['grouped'] == False:
-      self.images = data['images']
+      self.account_images = data
 
     # store data grouped by name
     else:
-      for image in data['images']:
+      for image in data:
         name = image['name']
-        if name not in self.images:
-          self.images[name] = []
-        self.images[name].append(image)
+        if name not in self.account_images:
+          self.account_images[name] = []
+        self.account_images[name].append(image)
 
     if 'name' in options:
-      return self._filter(self.images, options['name'], options['regex'])
+      return self._filter(self.account_images, options['name'], options['regex'])
 
-    return images
+    return self.account_images
 
   """
   Uses: /ssh_keys
@@ -224,7 +225,7 @@ class DigitalOceanApi():
     regex   = String
     lookup  = Boolean
   """
-  def keys(self, **options):
+  def ssh_keys(self, **options):
     # Set some defaults
     if 'name' in options:
       if 'regex' not in options:
@@ -234,14 +235,14 @@ class DigitalOceanApi():
       options['lookup'] = False
 
     # Try not to bother the API server
-    if len(self.ssh_keys) > 0 and options['lookup'] == False:
-      return self.ssh_keys
+    if len(self.account_ssh_keys) > 0 and options['lookup'] == False:
+      return self.account_ssh_keys
 
-    self.ssh_keys = self._lookup('ssh_keys')['ssh_keys']
+    self.account_ssh_keys = self._lookup('ssh_keys')['ssh_keys']
     if 'name' in options:
-      return self._filter(self.ssh_keys, options['name'], options['regex'])
+      return self._filter(self.account_ssh_keys, options['name'], options['regex'])
 
-    return self.ssh_keys
+    return self.account_ssh_keys
 
   """
   Uses: /sizes
@@ -260,19 +261,44 @@ class DigitalOceanApi():
       options['lookup'] = False
 
     # Try not to bother the API server
-    if len(self.sizes) > 0 and options['lookup'] == False:
-      return self.sizes
+    if len(self.droplet_sizes) > 0 and options['lookup'] == False:
+      return self.droplet_sizes
 
-    self.sizes = self._lookup('sizes')['sizes']
+    self.droplet_sizes = self._lookup('sizes')['sizes']
     if 'type' in options:
-      return self._filter(self.sizes, options['type'], options['regex'])
+      return self._filter(self.droplet_sizes, options['type'], options['regex'])
 
-    return self.sizes
+    return self.droplet_sizes
 
   """
+  Uses: /regions
+  Arguments:
+    name    = String
+    regex   = String
+    lookup  = Boolean
+  """
+  def regions(self, **options):
+    # Set some defaults
+    if 'name' in options:
+      if 'regex' not in options:
+        options['regex'] = False
 
-  /regions
+    if 'lookup' not in options:
+      options['lookup'] = False
 
+    # Try not to bother the API server
+    if len(self.digitalocean_regions) > 0 and options['lookup'] == False:
+      return self.digitalocean_regions
+
+    self.digitalocean_regions = self._lookup('regions')['regions']
+    if 'name' in options:
+      return self._filter(self.digitalocean_regions, options['name'], options['regex'])
+
+    return self.digitalocean_regions
+
+
+
+  """
   /images/[image_id]
   /images/[image_id]/destroy
   /images/[image_id]/transfer
@@ -294,3 +320,5 @@ class DigitalOceanApi():
 
   /events/[event_id]
   """
+
+digital_ocean = DigitalOceanApi()
