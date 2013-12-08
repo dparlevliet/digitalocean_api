@@ -100,7 +100,7 @@ class DigitalOceanApi():
   """
   def droplets(self, **options):
     # Set some defaults
-    if 'name' in options:
+    if 'hostname' in options:
       if 'regex' not in options:
         options['regex'] = False
 
