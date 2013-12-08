@@ -11,7 +11,6 @@ Class to get the server details via the Digital Ocean API.
 import urllib2
 import json
 import re
-from copy import copy
 
 class DigitalOceanApi():
   client_id             = None
